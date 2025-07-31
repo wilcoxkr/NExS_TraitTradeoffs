@@ -9,10 +9,11 @@
 {
 rm(list=ls())
 setwd("C:\\Users\\K_WILCOX\\Dropbox\\Kruger Compound Extremes\\Data\\2023 Data\\")
-
+path_to_figs <- "C:\\Users\\K_WILCOX\\Dropbox\\Kruger Compound Extremes\\TraitTradeoff Paper\\Figures\\"
 library(tidyverse)
 library(readr)
 library(GGally)
+library(ggfortify) # for plotting PCA
 
 
 #Standard error function
@@ -729,13 +730,31 @@ alltraits_long %>%
           )
         )
        
+    ##
+    ## Write final trait data frame to file -- ONE THING I SHOULD DO IS ADD IN WHEN EACH TRAIT WAS COLLECTED
+    write.csv(alltraits_long, file="..//..//TraitTradeoff Paper//Data//traits_all_clean_20250731.csv", row.names=F)
 
+    
+    ##
+    ## Make alltraits_wide version with transformed traits
+    alltraits_wide <- alltraits_long %>%
+      dplyr::select(-tf_type) %>%
+      pivot_wider(names_from=trait_name, values_from=c(trait_value,
+                                                       trait_value_tf))
+    
+    ##
+    ## Create a scaled column from transformed data, since it is more or less normal now
+    alltraits_grasses_long <- alltraits_long %>%
+      filter(fxn_grp=="G" & species %in% high_n_sp) %>%
+      group_by(trait_name) %>%
+      mutate(trait_value_scaled = scale(trait_value_tf)) %>%
+      ungroup()
+      
+    
 }
 
-
-
 ###
-### Plotting traits
+### Plotting traits biplots
 ###
 {
 alltraits_means <- alltraits_long %>%
@@ -805,18 +824,95 @@ for(TRAIT_X in 1:(length(trait_name_vec)-1)){
   }
 }
 
+##
+## Plotting select tradeoffs
+
+# SLA leaf thickness
+alltraits_means_wide %>%
+  ggplot(aes(x=trait_value_tf_mean_SLA, y=trait_value_tf_mean_leaf_thick,
+             xmin=trait_value_tf_mean_SLA-trait_value_tf_se_SLA,
+             xmax=trait_value_tf_mean_SLA+trait_value_tf_se_SLA,
+             ymin=trait_value_tf_mean_leaf_thick-trait_value_tf_se_leaf_thick,
+             ymax=trait_value_tf_mean_leaf_thick+trait_value_tf_se_leaf_thick)) +
+    geom_errorbar(width=0) +
+    geom_errorbarh(height=0) +
+    geom_point(size=3) +
+    geom_smooth(method="lm") +
+    theme_ppt +
+    labs(
+      x=expression(paste("Specific leaf area (", cm^{2}%.% g^{-1},")")),
+      y="Leaf thickness (mm)" 
+    ) +
+  annotate("text", x=16, y=-.5, label="r = -0.69", size=5)
+
+ggsave(paste0(path_to_figs, "SLA-leaf_thick biplot_",Sys.Date(),".png"), width=5, height=5, units="in")
+
+
+# Vcmax vs Jmax
+alltraits_means_wide %>%
+  filter(fxn_grp=="G"&species%in%high_n_sp) %>%
+  ggplot(aes(x=trait_value_tf_mean_Vcmax, y=trait_value_tf_mean_Jmax,
+             xmin=trait_value_tf_mean_Vcmax-trait_value_tf_se_Vcmax,
+             xmax=trait_value_tf_mean_Vcmax+trait_value_tf_se_Vcmax,
+             ymin=trait_value_tf_mean_Jmax-trait_value_tf_se_Jmax,
+             ymax=trait_value_tf_mean_Jmax+trait_value_tf_se_Jmax)) +
+  geom_errorbar(width=0) +
+  geom_errorbarh(height=0) +
+  geom_point(size=3) +
+  geom_smooth(method="lm") +
+  theme_ppt +
+  labs(
+    x=expression(paste("Vcmax (", mu, "mol ", m^{-2}, " ", s^{-1}, ")")),
+    y=expression(paste("Jmax (", mu, "mol ", m^{-2}, " ", s^{-1}, ")"))
+  ) +
+  annotate("text", x=3.85, y=6, label="r = 0.82", size=5)
+
+ggsave(paste0(path_to_figs, "Vcmax-Jmax_",Sys.Date(),".png"), width=5, height=5, units="in")
+
+with(filter(alltraits_means_wide,fxn_grp=="G"&species%in%high_n_sp),
+                  cor(trait_value_tf_mean_Vcmax,trait_value_tf_mean_Jmax))
+
+# Height vs leaf thickness
+alltraits_means_wide %>%
+  filter(fxn_grp=="G"&species%in%high_n_sp) %>%
+  ggplot(aes(x=trait_value_tf_mean_veg_height, y=trait_value_tf_mean_leaf_thick,
+             xmin=trait_value_tf_mean_veg_height-trait_value_tf_se_veg_height,
+             xmax=trait_value_tf_mean_veg_height+trait_value_tf_se_veg_height,
+             ymin=trait_value_tf_mean_leaf_thick-trait_value_tf_se_leaf_thick,
+             ymax=trait_value_tf_mean_leaf_thick+trait_value_tf_se_leaf_thick)) +
+  geom_errorbar(width=0) +
+  geom_errorbarh(height=0) +
+  geom_point(size=3) +
+  geom_smooth(method="lm") +
+  theme_ppt +
+  labs(
+    x="Vegetative height (cm)",
+    y="Leaf thickness (mm)"
+  ) +
+  annotate("text", x=9.25, y=-2.6, label="r = -0.69", size=5)
+
+ggsave(paste0(path_to_figs, "veg_height-leaf_thick biplot_",Sys.Date(),".png"), width=5, height=5, units="in")
+
+with(filter(alltraits_means_wide,fxn_grp=="G"&species%in%high_n_sp),
+     cor(trait_value_tf_mean_veg_height,trait_value_tf_mean_leaf_thick))
+
+
+
+
+## 
+## All pairs
 alltraits_long %>% dplyr::select(trait_name, tf_type) %>% unique(.)
 with(alltraits_long, unique(c(trait_name, tf_type)))
-trait_names <- colnames(alltraits_means_wide[27:36])
+trait_names <- colnames(alltraits_means_wide[27:37])
 
 label_map <- setNames(
   nm=trait_names,
-  object = gsub("trait_value_transformed_mean_", "", trait_names)
+  object = gsub("trait_value_tf_mean_", "", trait_names)
 )
 
 
 ggpairs(alltraits_means_wide %>% filter(fxn_grp=="G" & species %in% high_n_sp),
-        columns = 27:36,
+        columns = 27:37,
         lower = list(continuous = wrap("smooth", method = "lm", se = T)),
         labeller = as_labeller(label_map))
 
@@ -834,23 +930,241 @@ ggplot(alltraits_means_wide, aes(trait_value_transformed_mean_Jmax, trait_value_
 
 }
 
+###
+### Plotting PCA of all traits
+###
+{
+## Means only, all traits only 5 doms
+traits_means_4pca <- alltraits_means_wide %>% 
+  filter(fxn_grp=="G" & species %in% high_n_sp) %>% 
+  dplyr::select(trait_value_tf_mean_Jmax:trait_value_tf_mean_veg_height) %>%
+  na.omit(.)
 
-
-  trait_data <- trait_df %>% 
+colnames(traits_means_4pca) <- gsub("trait_value_tf_mean_","",colnames(traits_means_4pca))
+  
+traits_means_env <- alltraits_means_wide %>% 
+  filter(fxn_grp=="G" & species %in% high_n_sp) %>% 
+  dplyr::select(species:ps_path, trait_value_tf_mean_Jmax:trait_value_tf_mean_veg_height) %>%
   na.omit(.) %>%
-  dplyr::select(veg_height:SRL)
+  dplyr::select(species:ps_path)
 
+pca_traits_means <- prcomp(traits_means_4pca, scale.=T)
 
-trait_env <- trait_df %>% 
-  na.omit(traits_data) %>%
-  dplyr::select(block:species)
+autoplot(pca_traits_means, data=traits_means_env, colour="species",
+         loadings = TRUE, loadings.colour = 'blue',
+         loadings.label = TRUE, loadings.label.size = 3,
+         size=3, label.label = as.character(label_map_means_4pca))
 
-pca_trait <- prcomp(trait_data, scale.=T)
+## Means only, no root traits, more species
+traits_means_noroots_4pca <- alltraits_means_wide %>% 
+  filter(fxn_grp=="G" & species %in% high_n_sp) %>%
+  dplyr::select(trait_value_tf_mean_Jmax:trait_value_tf_mean_veg_height) %>%
+  dplyr::select(-trait_value_tf_mean_root_diam, -trait_value_tf_mean_SRL, -trait_value_tf_mean_tiller_pack) %>%
+  na.omit(.)
+  
+colnames(traits_means_noroots_4pca) <- gsub("trait_value_tf_mean_","",colnames(traits_means_noroots_4pca))
 
-autoplot(pca_trait, data=trait_env, colour="species",
+traits_means_noroots_env <- alltraits_means_wide %>% 
+  filter(fxn_grp=="G" & species %in% high_n_sp) %>% 
+  dplyr::select(species:ps_path, trait_value_tf_mean_Jmax:trait_value_tf_mean_veg_height) %>%
+  dplyr::select(-trait_value_tf_mean_root_diam, -trait_value_tf_mean_SRL, -trait_value_tf_mean_tiller_pack) %>%
+  na.omit(.) %>%
+  dplyr::select(species:ps_path)
+
+pca_traits_means_noroots <- prcomp(traits_means_noroots_4pca, scale.=T)
+
+autoplot(pca_traits_means_noroots, data=traits_means_noroots_env, colour="species",
          loadings = TRUE, loadings.colour = 'blue',
          loadings.label = TRUE, loadings.label.size = 3,
          size=3)
+
+
+## Individuals -- grasses only all traits
+## Individuals, all traits only 5 doms
+traits_indiv_4pca <- alltraits_wide %>%
+  filter(fxn_grp=="G" & species %in% high_n_sp) %>%
+  dplyr::select(trait_value_tf_SLA:trait_value_tf_Vcmax) %>%
+  na.omit(.)
+
+colnames(traits_indiv_4pca) <- gsub("trait_value_tf_","",colnames(traits_indiv_4pca))
+
+traits_indiv_env <- alltraits_wide %>% 
+  filter(fxn_grp=="G" & species %in% high_n_sp) %>% 
+  dplyr::select(block:ps_path, trait_value_tf_SLA:trait_value_tf_Vcmax) %>%
+  na.omit(.) %>%
+  dplyr::select(block:ps_path)
+
+pca_traits_indiv <- prcomp(traits_indiv_4pca, scale.=T)
+
+autoplot(pca_traits_indiv, data=traits_indiv_env, colour="species",
+         loadings = TRUE, loadings.colour = 'blue',
+         loadings.label = TRUE, loadings.label.size = 3,
+         size=3)
+
+## Individuals, no roots or tiller packing more grass species (NOTE: this doesn't really work since our ecophys measurements on non-doms were largely not linked up with other trait measurements... I should just stick with all-traits at the individual level)
+traits_indiv_noroots_4pca <- alltraits_wide %>%
+  filter(fxn_grp=="G" & species %in% high_n_sp) %>%
+  dplyr::select(trait_value_tf_SLA:trait_value_tf_Vcmax) %>%
+  dplyr::select(-trait_value_tf_root_diam, -trait_value_tf_SRL, -trait_value_tf_tiller_pack) %>%
+  na.omit(.)
+
+colnames(traits_indiv_noroots_4pca) <- gsub("trait_value_tf_","",colnames(traits_indiv_noroots_4pca))
+
+traits_indiv_noroots_env <- alltraits_wide %>% 
+  filter(fxn_grp=="G" & species %in% high_n_sp) %>% 
+  dplyr::select(block:ps_path, trait_value_tf_SLA:trait_value_tf_Vcmax) %>%
+  dplyr::select(-trait_value_tf_root_diam, -trait_value_tf_SRL, -trait_value_tf_tiller_pack) %>%
+  na.omit(.) %>%
+  dplyr::select(block:ps_path)
+
+pca_traits_noroots_indiv <- prcomp(traits_indiv_noroots_4pca, scale.=T)
+
+autoplot(pca_traits_noroots_indiv, data=traits_indiv_noroots_env, colour="species",
+         loadings = TRUE, loadings.colour = 'blue',
+         loadings.label = TRUE, loadings.label.size = 3,
+         size=3)
+
+
+}
+
+###
+### Density plots 
+###
+{
+  
+  theme_ppt <- theme_bw(base_size = 16) +  # base_size sets all default text sizes
+    theme(
+      plot.title = element_text(size = 20, face = "bold", hjust = 0.5),
+      axis.title = element_text(size = 18),
+      axis.text = element_text(size = 16),
+      legend.title = element_text(size = 16),
+      legend.text = element_text(size = 14),
+      strip.text = element_text(size = 16),   # For facets
+      panel.grid.major = element_line(linewidth = 0.3),
+      panel.grid.minor = element_blank(),
+      legend.position = "right",             # or "bottom", or "none"
+      plot.margin = margin(10, 10, 10, 10)    # Add space around the plot
+    )
+  
+  ## all traits facetted
+  alltraits_long %>%
+    filter(fxn_grp=="G" & species%in%high_n_sp) %>%
+    ggplot(aes(x=trait_value, col=species, fill=species)) +
+    geom_density(alpha=.5) +
+    facet_wrap(~trait_name, scales="free") +
+    theme_bw()
+
+  alltraits_long %>%
+    filter(fxn_grp=="G" & species%in%high_n_sp) %>%
+    ggplot(aes(x=trait_value, col=species, fill=species)) +
+    geom_histogram(aes(y = after_stat(count / sum(count)))) +
+    facet_wrap(~trait_name, scales="free")
+
+  ### Single traits - 
+  ## Vegetative height
+  means_sd_4plotting <- alltraits_long %>%
+    filter(fxn_grp=="G" & species%in%high_n_sp) %>%
+    group_by(species, trait_name) %>%
+    summarize(trait_mean = mean(trait_value, na.rm=T),
+              trait_median = median(trait_value, na.rm=T),
+              trait_sd = sd(trait_value, na.rm=T),
+              .groups="drop")
+
+  veg_height_means_4plotting <- means_sd_4plotting %>%
+    filter(trait_name=="veg_height") %>%
+    arrange(desc(trait_median)) %>%
+    mutate(y_pos=seq(0.050,0.055, length.out=8))
+  
+  alltraits_long %>%
+    filter(fxn_grp=="G" & species%in%high_n_sp) %>%
+    filter(trait_name=="veg_height") %>%
+      ggplot(aes(x=trait_value, col=species, fill=species)) +
+      geom_density(alpha=.5, linewidth=1) +
+      geom_errorbarh(inherit.aes=F, data=veg_height_means_4plotting,
+                     aes(x=trait_median, y=y_pos, xmin=trait_median-trait_sd, xmax=trait_median+trait_sd, col=species), height=0) +
+      geom_point(inherit.aes=F, data=veg_height_means_4plotting,
+                 aes(x=trait_median, y=y_pos, col=species), size=3, pch=21, fill='white') +
+      labs(
+            x= "Vegetation height (cm)",
+            y= "Density"
+            ) +
+      theme_ppt
+
+  ggsave(paste0(path_to_figs, "veg_height density_",Sys.Date(),".png"), width=7, height=5, units="in")
+
+  ## Vcmax
+  
+  Vcmax_means_4plotting <- means_sd_4plotting %>%
+    filter(trait_name=="Vcmax") %>%
+    arrange(desc(trait_median)) %>%
+    mutate(y_pos=seq(0.080,0.0945, length.out=8))
+  
+  alltraits_long %>%
+    filter(fxn_grp=="G" & species%in%high_n_sp) %>%
+    filter(trait_name=="Vcmax") %>%
+    ggplot(aes(x=trait_value, col=species, fill=species)) +
+    geom_density(alpha=.5, linewidth=1) +
+    ylim(0,0.095) +
+    geom_errorbarh(inherit.aes=F, data=Vcmax_means_4plotting,
+                   aes(x=trait_median, y=y_pos, xmin=trait_median-trait_sd, xmax=trait_median+trait_sd, col=species), height=0) +
+    geom_point(inherit.aes=F, data=Vcmax_means_4plotting,
+               aes(x=trait_median, y=y_pos, col=species), size=3, pch=21, fill='white') +
+    labs(
+      x=expression(paste("Vcmax (", mu, "mol ", m^{-2}, " ", s^{-1}, ")")),
+      y= "Density"
+    ) +
+    theme_ppt
+  
+  ggsave(paste0(path_to_figs, "Vcmax density_",Sys.Date(),".png"), width=7, height=5, units="in")
+  
+  
+  ###
+  ### Looking at standard deviation among means and individuals for all traits
+  
+  stdev_df <- alltraits_grasses_long %>%
+    group_by(species, trait_name) %>%
+    summarize(trait_scaled_mean = mean(trait_value_scaled, na.rm=T),
+              trait_scaled_sd = sd(trait_value_scaled, na.rm=T),
+              .groups="drop") %>%
+    group_by(trait_name) %>%
+    summarize(
+              inter.sd_val = sd(trait_scaled_mean, na.rm=T),
+              inter.sd_se = NA,
+              intra.sd_val = mean(trait_scaled_sd, na.rm=T),
+              intra.sd_se = sd(trait_scaled_sd,na.rm=T)/sqrt(length(trait_scaled_sd)),
+              .groups="drop"
+              ) %>%
+    pivot_longer(
+      cols=c("inter.sd_val", "inter.sd_se","intra.sd_val", "intra.sd_se"),
+      names_to=c("group",".value"),
+      names_sep = "_"
+    )
+  
+  stdev_df$trait_name <- factor(stdev_df$trait_name, levels=c("SLA","SRL","Vcmax","Jmax","LDMC","leaf_thick",
+                                                              "root_diam","tiller_diam","tiller_pack",
+                                                              "veg_height","leaf_area"))
+  trait_col_mapper <- c(rep("darkgreen",4),rep("dodgerblue4",3),rep("darkorange3",4))
+  
+  stdev_df %>%
+    ggplot(aes(x=trait_name, y=val, ymin=val-se, ymax=val+se, fill=group)) +
+    geom_col(position=position_dodge(width=0.9), col="black") +
+    geom_errorbar(width=.1, position=position_dodge(width=0.9)) +
+#    facet_wrap(.~trait_name, nrow=1, scales="free_y") +
+    scale_fill_manual(labels=c("Between species", "Within species"), values=c("grey90","black")) +
+    theme_few(base_size = 16) +
+    theme(
+      axis.text.x = element_text(angle=45, hjust=1, size = 14, color=trait_col_mapper),
+      axis.text.y = element_text(size = 14),
+      axis.title = element_text(size = 16),
+      plot.margin = margin(10, 10, 10, 10)
+    ) +
+    labs(x="", y="Variation among trait values (st.dev)")
+  
+  ggsave(paste0(path_to_figs, "Intra vs inter specific trait variation_",Sys.Date(),".png"), width=12, height=4, units="in")
+  
+}
+
+
 
 ### non-doms only
 trait_nondom_data <- leaf_traits_nondom %>% 
